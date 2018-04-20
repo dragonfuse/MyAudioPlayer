@@ -15,6 +15,8 @@ import android.view.View;
 import android.widget.Toast;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -23,6 +25,7 @@ public class MainActivity extends AppCompatActivity {
     String TAG = "MainActivity :";
 
     Uri uri = null;
+    List<Uri> uriList = new ArrayList<>();
 
     enum MediaPlayerStates {
         MEDIA_PLAYER_STATE_ERROR,
@@ -44,7 +47,7 @@ public class MainActivity extends AppCompatActivity {
     private MediaPlayer.OnCompletionListener onCompletionListener = new MediaPlayer.OnCompletionListener() {
         @Override
         public void onCompletion(MediaPlayer mp) {
-            releaseMediaPlayer();
+            playNext();
         }
     };
 
@@ -131,6 +134,7 @@ public class MainActivity extends AppCompatActivity {
                 if (resultCode == RESULT_OK) {
                     // Get the Uri of the selected file
                     uri = data.getData();
+                    uriList.add(uri);
                     Log.d(TAG, "File Uri: " + uri.toString());
 
                     // TODO check file type is Audio
@@ -141,25 +145,47 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void play(View view) {
-        if (mediaPlayer == null) {
-            mediaPlayer = new MediaPlayer();
-            mediaPlayer.setOnCompletionListener(onCompletionListener);
-        }
-        if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_IDLE) {
-            try {
-                mediaPlayer.setDataSource(getApplicationContext(), uri);
-            } catch (IOException e) {
-                e.printStackTrace();
+        /*
+         * User has pressed the Play button. If the mediaPlayer is Paused
+         * then simply start it again
+         */
+        if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_PAUSED) {
+            mediaPlayer.start();
+            mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_STARTED;
+        } else {
+            /*
+             *Check if at least one file has been selected in which case play it
+             * otherwise do nothing
+             */
+            if (!uriList.isEmpty()) {
+                if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_IDLE) {
+                    /*
+                     * Playing first track after startup or after having been stopped
+                     */
+                    if (mediaPlayer == null) {
+                        mediaPlayer = new MediaPlayer();
+                        mediaPlayer.setOnCompletionListener(onCompletionListener);
+                    }
+                    try {
+                        mediaPlayer.setDataSource(getApplicationContext(), uriList.remove(0));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    try {
+                        mediaPlayer.prepare();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    mediaPlayer.start();
+                    mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_STARTED;
+                } else {
+                    /*
+                     * Play next track on the list
+                     */
+                    playNext();
+                }
             }
-
-            try {
-                mediaPlayer.prepare();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
-        mediaPlayer.start();
-        mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_STARTED;
     }
 
     public void pause(View view) {
@@ -172,19 +198,41 @@ public class MainActivity extends AppCompatActivity {
     public void stop(View view) {
         if (mediaPlayer != null) {
             mediaPlayer.stop();
+            uriList.clear();
             releaseMediaPlayer();
+        }
+    }
+
+    private void playNext() {
+        /*
+         * Release mediaPlayer and then check if there is at least one more file queued
+         */
+        releaseMediaPlayer();
+        if (!uriList.isEmpty()) {
+            /*
+             * No need to check for mediaPlayer state or null as we have just released
+             */
+            mediaPlayer = new MediaPlayer();
+            mediaPlayer.setOnCompletionListener(onCompletionListener);
+            try {
+                mediaPlayer.setDataSource(getApplicationContext(), uriList.remove(0));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            try {
+                mediaPlayer.prepare();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            mediaPlayer.start();
+            mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_STARTED;
         }
     }
 
     private void releaseMediaPlayer() {
         if (mediaPlayer != null) {
-            // Regardless of the current state of the media player, release its resources
-            // because we no longer need it.
             mediaPlayer.release();
-
-            // Set the media player back to null. For our code, we've decided that
-            // setting the media player to null is an easy way to tell that the media player
-            // is not configured to play an audio file at the moment.
             mediaPlayer = null;
             mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_IDLE;
         }
