@@ -10,19 +10,24 @@
         android:id="@+id/select_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:text="@string/select"
+        android:onClick="selectFile"/>
+    <Button
+        android:id="@+id/play_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:text="@string/play"
-        android:onClick="showAudioFileChooser" />
+        android:onClick="play" />
     <Button
         android:id="@+id/pause_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Pause"
+        android:text="@string/pause"
         android:onClick="pause"/>
     <Button
         android:id="@+id/stop_button"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Stop"
+        android:text="@string/stop"
         android:onClick="stop"/>
-
 </LinearLayout>

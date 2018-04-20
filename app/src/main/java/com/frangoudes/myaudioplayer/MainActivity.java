@@ -18,13 +18,30 @@ import java.io.IOException;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final int MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE = 777;
-    private static final int FILE_SELECT_CODE = 0;
-    String TAG = "my Log msg : ";
+    private static final int MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE = 77;
+    private static final int FILE_SELECT_CODE = 777;
+    String TAG = "MainActivity :";
 
-    private MediaPlayer mediaPlayer = null;
+    Uri uri = null;
 
-    private MediaPlayer.OnCompletionListener mOnCompletionListener = new MediaPlayer.OnCompletionListener() {
+    enum MediaPlayerStates {
+        MEDIA_PLAYER_STATE_ERROR,
+        MEDIA_PLAYER_IDLE,
+        MEDIA_PLAYER_INITIALIZED,
+        MEDIA_PLAYER_PREPARING,
+        MEDIA_PLAYER_PREPARED,
+        MEDIA_PLAYER_STARTED,
+        MEDIA_PLAYER_PAUSED,
+        MEDIA_PLAYER_STOPPED,
+        MEDIA_PLAYER_PLAYBACK_COMPLETE
+    }
+
+    MediaPlayerStates mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_IDLE;
+
+    //MediaPlayer mediaPlayer = new MediaPlayer();
+    MediaPlayer mediaPlayer = null;
+
+    private MediaPlayer.OnCompletionListener onCompletionListener = new MediaPlayer.OnCompletionListener() {
         @Override
         public void onCompletion(MediaPlayer mp) {
             releaseMediaPlayer();
@@ -36,7 +53,6 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Here, thisActivity is the current activity
         if (ContextCompat.checkSelfPermission(this,
                 Manifest.permission.READ_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -92,7 +108,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    public void showAudioFileChooser(View v) {
+    public void selectFile(View v) {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("*/*");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -114,54 +130,53 @@ public class MainActivity extends AppCompatActivity {
             case FILE_SELECT_CODE:
                 if (resultCode == RESULT_OK) {
                     // Get the Uri of the selected file
-                    Uri uri = data.getData();
+                    uri = data.getData();
                     Log.d(TAG, "File Uri: " + uri.toString());
-                    // Get the path
-                    String path;
-                    path = uri.getPath();
-                    Log.d(TAG, "File Path: " + path);
-                    // Get the file instance
-                    // File file = new File(path);
-                    // Initiate the upload
-                    MediaPlayer mediaPlayer = new MediaPlayer();
-                    mediaPlayer.setOnCompletionListener(mOnCompletionListener);
-                    Log.d(TAG, "about to call setAudioStreamSource");
-                    mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-                    Log.d(TAG, "about to call setDataSource");
-                    try {
-                        mediaPlayer.setDataSource(getApplicationContext(), uri);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    Log.d(TAG, "about to call prepare");
-                    try {
-                        mediaPlayer.prepare();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    Log.d(TAG, "about to call start");
-                    mediaPlayer.start();
+
+                    // TODO check file type is Audio
                 }
                 break;
         }
         super.onActivityResult(requestCode, resultCode, data);
     }
 
-    public void pause(View view){
-        if(mediaPlayer != null) {
+    public void play(View view) {
+        if (mediaPlayer == null) {
+            mediaPlayer = new MediaPlayer();
+            mediaPlayer.setOnCompletionListener(onCompletionListener);
+        }
+        if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_IDLE) {
+            try {
+                mediaPlayer.setDataSource(getApplicationContext(), uri);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            try {
+                mediaPlayer.prepare();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        mediaPlayer.start();
+        mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_STARTED;
+    }
+
+    public void pause(View view) {
+        if (mediaPlayer != null) {
             mediaPlayer.pause();
+            mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_PAUSED;
         }
     }
 
-    public void stop(View view){
-        if(mediaPlayer != null){
+    public void stop(View view) {
+        if (mediaPlayer != null) {
             mediaPlayer.stop();
             releaseMediaPlayer();
         }
     }
 
     private void releaseMediaPlayer() {
-        // If the media player is not null, then it may be currently playing a sound.
         if (mediaPlayer != null) {
             // Regardless of the current state of the media player, release its resources
             // because we no longer need it.
@@ -171,7 +186,7 @@ public class MainActivity extends AppCompatActivity {
             // setting the media player to null is an easy way to tell that the media player
             // is not configured to play an audio file at the moment.
             mediaPlayer = null;
+            mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_IDLE;
         }
     }
-
 }
