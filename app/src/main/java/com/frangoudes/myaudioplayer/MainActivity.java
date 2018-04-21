@@ -40,16 +40,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     MediaPlayerStates mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_IDLE;
-
-    //MediaPlayer mediaPlayer = new MediaPlayer();
     MediaPlayer mediaPlayer = null;
 
-    private MediaPlayer.OnCompletionListener onCompletionListener = new MediaPlayer.OnCompletionListener() {
-        @Override
-        public void onCompletion(MediaPlayer mp) {
-            playNext();
-        }
-    };
+    private MediaPlayer.OnCompletionListener onCompletionListener =
+            new MediaPlayer.OnCompletionListener() {
+                @Override
+                public void onCompletion(MediaPlayer mp) {
+                    mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_PLAYBACK_COMPLETE;
+                    playNext();
+                }
+            };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -110,7 +110,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
     public void selectFile(View v) {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("*/*");
@@ -121,9 +120,9 @@ public class MainActivity extends AppCompatActivity {
                     Intent.createChooser(intent, "Select a File to Upload"),
                     FILE_SELECT_CODE);
         } catch (android.content.ActivityNotFoundException ex) {
-            // Potentially direct the user to the Market with a Dialog
+            // Direct the user to the Market with a Dialog
             Toast.makeText(this, "Please install a File Manager.",
-                    Toast.LENGTH_SHORT).show();
+                    Toast.LENGTH_LONG).show();
         }
     }
 
@@ -137,7 +136,8 @@ public class MainActivity extends AppCompatActivity {
                     uriList.add(uri);
                     Log.d(TAG, "File Uri: " + uri.toString());
 
-                    // TODO check file type is Audio
+                    // TODO check file type is Audio?
+
                 }
                 break;
         }
@@ -146,45 +146,27 @@ public class MainActivity extends AppCompatActivity {
 
     public void play(View view) {
         /*
-         * User has pressed the Play button. If the mediaPlayer is Paused
-         * then simply start it again
+         * User has pressed the Play button
          */
         if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_PAUSED) {
-            mediaPlayer.start();
-            mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_STARTED;
+            /*
+             * mediaPlayer is Paused so simply restart it
+             */
+            try {
+                mediaPlayer.start();
+                mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_STARTED;
+            } catch (IllegalStateException e) {
+                Toast.makeText(this, "File access error.",
+                        Toast.LENGTH_LONG).show();
+
+                e.printStackTrace();
+            }
         } else {
             /*
-             *Check if at least one file has been selected in which case play it
-             * otherwise do nothing
+             * mediaPlayer is either Idle or already playing a track (Started). Try to play another
+             * track
              */
-            if (!uriList.isEmpty()) {
-                if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_IDLE) {
-                    /*
-                     * Playing first track after startup or after having been stopped
-                     */
-                    if (mediaPlayer == null) {
-                        mediaPlayer = new MediaPlayer();
-                        mediaPlayer.setOnCompletionListener(onCompletionListener);
-                    }
-                    try {
-                        mediaPlayer.setDataSource(getApplicationContext(), uriList.remove(0));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    try {
-                        mediaPlayer.prepare();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    mediaPlayer.start();
-                    mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_STARTED;
-                } else {
-                    /*
-                     * Play next track on the list
-                     */
-                    playNext();
-                }
-            }
+            playNext();
         }
     }
 
@@ -196,37 +178,84 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void stop(View view) {
+        /*
+         * The User has pressed the Stop button. Stop and release the mediaPlayer and clear the
+         * track list
+         */
         if (mediaPlayer != null) {
             mediaPlayer.stop();
-            uriList.clear();
             releaseMediaPlayer();
+            uriList.clear();
         }
     }
 
     private void playNext() {
-        /*
-         * Release mediaPlayer and then check if there is at least one more file queued
-         */
-        releaseMediaPlayer();
-        if (!uriList.isEmpty()) {
-            /*
-             * No need to check for mediaPlayer state or null as we have just released
-             */
-            mediaPlayer = new MediaPlayer();
-            mediaPlayer.setOnCompletionListener(onCompletionListener);
-            try {
-                mediaPlayer.setDataSource(getApplicationContext(), uriList.remove(0));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        switch (mediaPlayerState) {
+            case MEDIA_PLAYER_IDLE:
+                /*
+                 * We get here either because:
+                 * 1. User has pressed Play for the first time
+                 * 2. User has pressed Play after having pressed Stop
+                 * 3. Track finished and there was no other track to be played
+                 */
+                if (!uriList.isEmpty()) {
+                    if (mediaPlayer == null) {
+                        startNewMediaPlayer();
+                    }
+                }
+                break;
+            case MEDIA_PLAYER_STARTED:
+                /*
+                 * User has pressed Start whilst a track is already playing. Play the next track if
+                 * there is one otherwise do nothing, allowing current track to finish
+                 */
+                if (!uriList.isEmpty()) {
+                    /*
+                     * stop and release the mediaPlayer and then play next track
+                     */
+                    if (mediaPlayer != null) {
+                        mediaPlayer.stop();
+                        releaseMediaPlayer();
+                    }
+                    startNewMediaPlayer();
+                }
+                break;
 
-            try {
-                mediaPlayer.prepare();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            case MEDIA_PLAYER_PLAYBACK_COMPLETE:
+                /*
+                 * We get here from the OnCompletionListener because a track has finishing
+                 * Stop and release the mediaPlayer
+                 */
+                if (mediaPlayer != null) {
+                    mediaPlayer.stop();
+                    releaseMediaPlayer();
+                }
+                /*
+                 * Play the next track if there is one
+                 */
+                if (!uriList.isEmpty()) {
+                    startNewMediaPlayer();
+                }
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    private void startNewMediaPlayer() {
+        mediaPlayer = new MediaPlayer();
+        mediaPlayer.setOnCompletionListener(onCompletionListener);
+        try {
+            mediaPlayer.setDataSource(getApplicationContext(), uriList.remove(0));
+            mediaPlayer.prepare();
             mediaPlayer.start();
             mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_STARTED;
+        } catch (IOException | IllegalStateException e) {
+            Toast.makeText(this, "File access error",
+                    Toast.LENGTH_LONG).show();
+            e.printStackTrace();
+
         }
     }
 
