@@ -3,20 +3,23 @@ package com.frangoudes.myaudioplayer;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
+import android.text.method.ScrollingMovementMethod;
 import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.apache.commons.io.FilenameUtils;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -26,6 +29,7 @@ public class MainActivity extends AppCompatActivity {
 
     Uri uri = null;
     List<Uri> uriList = new ArrayList<>();
+    List<String> trackList = new ArrayList<String>();
 
     enum MediaPlayerStates {
         MEDIA_PLAYER_STATE_ERROR,
@@ -46,8 +50,22 @@ public class MainActivity extends AppCompatActivity {
             new MediaPlayer.OnCompletionListener() {
                 @Override
                 public void onCompletion(MediaPlayer mp) {
-                    mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_PLAYBACK_COMPLETE;
-                    playNext();
+                    if (uriList.isEmpty()) {
+                        /*
+                         * No more tracks to be played. Release mediaPlacompileyer
+                         */
+                        releaseMediaPlayer();
+                    } else {
+                        /*
+                         * There is a track waiting to be played
+                         */
+                        mediaPlayer.reset();
+                        startMediaPlayer();
+                        displayPlayList();
+                        if (uriList.isEmpty()) {
+                            findViewById(R.id.next_button).setVisibility(View.INVISIBLE);
+                        }
+                    }
                 }
             };
 
@@ -64,11 +82,9 @@ public class MainActivity extends AppCompatActivity {
             // Should we show an explanation?
             if (ActivityCompat.shouldShowRequestPermissionRationale(this,
                     Manifest.permission.READ_EXTERNAL_STORAGE)) {
-
-                // Show an explanation to the user *asynchronously* -- don't block
-                // this thread waiting for the user's response! After the user
-                // sees the explanation, try again to request the permission.
-
+                Toast.makeText(this,
+                        "Permission required to access Storage.",
+                        Toast.LENGTH_LONG).show();
             } else {
 
                 // No explanation needed; request the permission
@@ -76,37 +92,10 @@ public class MainActivity extends AppCompatActivity {
                         new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
                         MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE);
 
-                // MY_PERMISSIONS_REQUEST_READ_CONTACTS is an
+                // MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE is an
                 // app-defined int constant. The callback method gets the
                 // result of the request.
             }
-        } else {
-            // Permission has already been granted
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           String permissions[], int[] grantResults) {
-        switch (requestCode) {
-            case MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE: {
-                // If request is cancelled, the result arrays are empty.
-                if (grantResults.length > 0
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-
-                    // permission was granted, yay! Do the
-                    // contacts-related task you need to do.
-
-                } else {
-
-                    // permission denied, boo! Disable the
-                    // functionality that depends on this permission.
-                }
-                return;
-            }
-
-            // other 'case' lines to check for other
-            // permissions this app might request.
         }
     }
 
@@ -131,20 +120,29 @@ public class MainActivity extends AppCompatActivity {
         switch (requestCode) {
             case FILE_SELECT_CODE:
                 if (resultCode == RESULT_OK) {
-                    // Get the Uri of the selected file
-                    uri = data.getData();
-                    uriList.add(uri);
-                    Log.d(TAG, "File Uri: " + uri.toString());
+                    // Add the Uri of the selected file to the list
+                    uriList.add(data.getData());
+                    if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_IDLE) {
+                        Button b = findViewById(R.id.play_pause_button);
+                        b.setText(R.string.play);
+                        b.setVisibility(View.VISIBLE);
+                        findViewById(R.id.stop_button).setVisibility(View.VISIBLE);
 
-                    // TODO check file type is Audio?
-
+                    } else {
+                        if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_STARTED ||
+                                mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_PAUSED) {
+                            findViewById(R.id.next_button).setVisibility(View.VISIBLE);
+                        }
+                    }
                 }
+                displayPlayList();
                 break;
         }
         super.onActivityResult(requestCode, resultCode, data);
     }
 
-    public void play(View view) {
+    public void play_pause(View view) {
+
         /*
          * User has pressed the Play button
          */
@@ -155,6 +153,8 @@ public class MainActivity extends AppCompatActivity {
             try {
                 mediaPlayer.start();
                 mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_STARTED;
+                Button b = findViewById(R.id.play_pause_button);
+                b.setText(R.string.pause);
             } catch (IllegalStateException e) {
                 Toast.makeText(this, "File access error.",
                         Toast.LENGTH_LONG).show();
@@ -162,100 +162,65 @@ public class MainActivity extends AppCompatActivity {
                 e.printStackTrace();
             }
         } else {
-            /*
-             * mediaPlayer is either Idle or already playing a track (Started). Try to play another
-             * track
-             */
-            playNext();
+            if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_IDLE) {
+                /*
+                 * User has pressed Play before a track has ever been played
+                 * Check that at least on track has been selected and play, otherwise do nothing
+                 */
+                if (!uriList.isEmpty()) {
+                    mediaPlayer = new MediaPlayer();
+                    mediaPlayer.setOnCompletionListener(onCompletionListener);
+                    startMediaPlayer();
+                    if (!uriList.isEmpty()) {
+                        findViewById(R.id.next_button).setVisibility(View.VISIBLE);
+                    }
+                }
+            } else {
+                if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_STARTED) {
+                    mediaPlayer.pause();
+                    mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_PAUSED;
+                    Button b = findViewById(R.id.play_pause_button);
+                    b.setText(R.string.play);
+                }
+            }
         }
     }
 
-    public void pause(View view) {
-        if (mediaPlayer != null) {
-            mediaPlayer.pause();
-            mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_PAUSED;
+    public void next(View view) {
+
+        mediaPlayer.reset();
+        startMediaPlayer();
+        if (uriList.isEmpty()) {
+            findViewById(R.id.next_button).setVisibility(View.INVISIBLE);
         }
     }
 
     public void stop(View view) {
-        /*
-         * The User has pressed the Stop button. Stop and release the mediaPlayer and clear the
-         * track list
-         */
         if (mediaPlayer != null) {
             mediaPlayer.stop();
-            releaseMediaPlayer();
-            uriList.clear();
         }
+        releaseMediaPlayer();
+        uriList.clear();
     }
 
-    private void playNext() {
-        switch (mediaPlayerState) {
-            case MEDIA_PLAYER_IDLE:
-                /*
-                 * We get here either because:
-                 * 1. User has pressed Play for the first time
-                 * 2. User has pressed Play after having pressed Stop
-                 * 3. Track finished and there was no other track to be played
-                 */
-                if (!uriList.isEmpty()) {
-                    if (mediaPlayer == null) {
-                        startNewMediaPlayer();
-                    }
-                }
-                break;
-            case MEDIA_PLAYER_STARTED:
-                /*
-                 * User has pressed Start whilst a track is already playing. Play the next track if
-                 * there is one otherwise do nothing, allowing current track to finish
-                 */
-                if (!uriList.isEmpty()) {
-                    /*
-                     * stop and release the mediaPlayer and then play next track
-                     */
-                    if (mediaPlayer != null) {
-                        mediaPlayer.stop();
-                        releaseMediaPlayer();
-                    }
-                    startNewMediaPlayer();
-                }
-                break;
-
-            case MEDIA_PLAYER_PLAYBACK_COMPLETE:
-                /*
-                 * We get here from the OnCompletionListener because a track has finishing
-                 * Stop and release the mediaPlayer
-                 */
-                if (mediaPlayer != null) {
-                    mediaPlayer.stop();
-                    releaseMediaPlayer();
-                }
-                /*
-                 * Play the next track if there is one
-                 */
-                if (!uriList.isEmpty()) {
-                    startNewMediaPlayer();
-                }
-                break;
-
-            default:
-                break;
-        }
-    }
-
-    private void startNewMediaPlayer() {
-        mediaPlayer = new MediaPlayer();
-        mediaPlayer.setOnCompletionListener(onCompletionListener);
+    private void startMediaPlayer() {
         try {
-            mediaPlayer.setDataSource(getApplicationContext(), uriList.remove(0));
+            uri = uriList.remove(0);
+            mediaPlayer.setDataSource(getApplicationContext(), uri);
             mediaPlayer.prepare();
             mediaPlayer.start();
             mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_STARTED;
+            Button b = findViewById(R.id.play_pause_button);
+            b.setText(R.string.pause);
+            findViewById(R.id.stop_button).setVisibility(View.VISIBLE);
+            TextView textViewPlaying = (TextView) findViewById(R.id.playing);
+           // textViewPlaying.setText(R.string.playing);
+            textViewPlaying.setText(FilenameUtils.getBaseName(uri.toString()));
+            displayPlayList();
         } catch (IOException | IllegalStateException e) {
             Toast.makeText(this, "File access error",
                     Toast.LENGTH_LONG).show();
             e.printStackTrace();
-
         }
     }
 
@@ -263,7 +228,29 @@ public class MainActivity extends AppCompatActivity {
         if (mediaPlayer != null) {
             mediaPlayer.release();
             mediaPlayer = null;
-            mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_IDLE;
+        }
+        mediaPlayerState = MediaPlayerStates.MEDIA_PLAYER_IDLE;
+        findViewById(R.id.play_pause_button).setVisibility(View.INVISIBLE);
+        findViewById(R.id.next_button).setVisibility(View.INVISIBLE);
+        findViewById(R.id.stop_button).setVisibility(View.INVISIBLE);
+        TextView textViewPlaying = (TextView) findViewById(R.id.playing);
+        textViewPlaying.setText("");
+        TextView textViewPlayList = (TextView) findViewById(R.id.play_list);
+        textViewPlayList.setText("");
+    }
+
+    private void displayPlayList() {
+        TextView textViewPlayList = (TextView) findViewById(R.id.play_list);
+        textViewPlayList.setMovementMethod(new ScrollingMovementMethod());
+        textViewPlayList.setText(null);
+        if (uriList.isEmpty()) {
+            textViewPlayList.setText("");
+        } else {
+            for (int i = uriList.size() -1; i >=0; i--) {
+                uri = uriList.get(i);
+                trackList.add(i, FilenameUtils.getBaseName(uriList.get(i).toString()));
+                textViewPlayList.append("\n" + trackList.get(i));
+            }
         }
     }
 }

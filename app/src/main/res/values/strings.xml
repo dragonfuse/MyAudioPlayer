@@ -1,7 +1,9 @@
 <resources>
     <string name="app_name">My Audio Player</string>
-    <string name="select">Select File</string>
+    <string name="select">Select Track</string>
     <string name="play">Play</string>
     <string name="pause">Pause</string>
     <string name="stop">Stop</string>
+    <string name="next">Next</string>
+    <string name="playing">Playing:</string>
 </resources>
