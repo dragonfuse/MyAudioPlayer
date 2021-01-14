@@ -15,6 +15,8 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.frangoudes.myaudioplayer.R;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +31,7 @@ public class MainActivity extends AppCompatActivity {
 
     Uri uri = null;
     List<Uri> uriList = new ArrayList<>();
-    List<String> trackList = new ArrayList<String>();
+    List<String> trackList = new ArrayList<>();
 
     enum MediaPlayerStates {
         MEDIA_PLAYER_STATE_ERROR,
@@ -101,7 +103,8 @@ public class MainActivity extends AppCompatActivity {
 
     public void selectFile(View v) {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-        intent.setType("*/*");
+        intent.setType("audio/*");
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
 
         try {
@@ -117,26 +120,24 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        switch (requestCode) {
-            case FILE_SELECT_CODE:
-                if (resultCode == RESULT_OK) {
-                    // Add the Uri of the selected file to the list
-                    uriList.add(data.getData());
-                    if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_IDLE) {
-                        Button b = findViewById(R.id.play_pause_button);
-                        b.setText(R.string.play);
-                        b.setVisibility(View.VISIBLE);
-                        findViewById(R.id.stop_button).setVisibility(View.VISIBLE);
+        if (requestCode == FILE_SELECT_CODE) {
+            if (resultCode == RESULT_OK) {
+                // Add the Uri of the selected file to the list
+                uriList.add(data.getData());
+                if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_IDLE) {
+                    Button b = findViewById(R.id.play_pause_button);
+                    b.setText(R.string.play);
+                    b.setVisibility(View.VISIBLE);
+                    findViewById(R.id.stop_button).setVisibility(View.VISIBLE);
 
-                    } else {
-                        if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_STARTED ||
-                                mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_PAUSED) {
-                            findViewById(R.id.next_button).setVisibility(View.VISIBLE);
-                        }
+                } else {
+                    if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_STARTED ||
+                            mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_PAUSED) {
+                        findViewById(R.id.next_button).setVisibility(View.VISIBLE);
                     }
                 }
-                displayPlayList();
-                break;
+            }
+            displayPlayList();
         }
         super.onActivityResult(requestCode, resultCode, data);
     }
