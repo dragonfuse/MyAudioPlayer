@@ -19,9 +19,8 @@ import com.frangoudes.myaudioplayer.R;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-
-import org.apache.commons.io.FilenameUtils;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -29,7 +28,6 @@ public class MainActivity extends AppCompatActivity {
     private static final int FILE_SELECT_CODE = 777;
     String TAG = "MainActivity :";
 
-    Uri uri = null;
     List<Uri> uriList = new ArrayList<>();
     List<String> trackList = new ArrayList<>();
 
@@ -101,7 +99,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public void selectFile(View v) {
+    public void launchFileManager(View v) {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("audio/*");
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
@@ -120,21 +118,29 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == FILE_SELECT_CODE) {
-            if (resultCode == RESULT_OK) {
+        if (requestCode == FILE_SELECT_CODE && resultCode == RESULT_OK && data != null) {
+            if (data.getData() != null) {
                 // Add the Uri of the selected file to the list
                 uriList.add(data.getData());
-                if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_IDLE) {
-                    Button b = findViewById(R.id.play_pause_button);
-                    b.setText(R.string.play);
-                    b.setVisibility(View.VISIBLE);
-                    findViewById(R.id.stop_button).setVisibility(View.VISIBLE);
-
-                } else {
-                    if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_STARTED ||
-                            mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_PAUSED) {
-                        findViewById(R.id.next_button).setVisibility(View.VISIBLE);
+            } else {
+                if (data.getClipData() != null) {
+                    // multiple files selected
+                    for (int i = 0; i < data.getClipData().getItemCount(); i++) {
+                        uriList.add(data.getClipData().getItemAt(i).getUri());
                     }
+                    Collections.sort(uriList);
+                }
+            }
+            if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_IDLE) {
+                Button b = findViewById(R.id.play_pause_button);
+                b.setText(R.string.play);
+                b.setVisibility(View.VISIBLE);
+                findViewById(R.id.stop_button).setVisibility(View.VISIBLE);
+
+            } else {
+                if (mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_STARTED ||
+                        mediaPlayerState == MediaPlayerStates.MEDIA_PLAYER_PAUSED) {
+                    findViewById(R.id.next_button).setVisibility(View.VISIBLE);
                 }
             }
             displayPlayList();
@@ -206,7 +212,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void startMediaPlayer() {
         try {
-            uri = uriList.remove(0);
+            Uri uri = uriList.remove(0);
             mediaPlayer.setDataSource(getApplicationContext(), uri);
             mediaPlayer.prepare();
             mediaPlayer.start();
@@ -215,8 +221,8 @@ public class MainActivity extends AppCompatActivity {
             b.setText(R.string.pause);
             findViewById(R.id.stop_button).setVisibility(View.VISIBLE);
             TextView textViewPlaying = (TextView) findViewById(R.id.playing);
-           // textViewPlaying.setText(R.string.playing);
-            textViewPlaying.setText(FilenameUtils.getBaseName(uri.toString()));
+            // textViewPlaying.setText(R.string.playing);
+            textViewPlaying.setText(uri.getPath());
             displayPlayList();
         } catch (IOException | IllegalStateException e) {
             Toast.makeText(this, "File access error",
@@ -234,23 +240,21 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.play_pause_button).setVisibility(View.INVISIBLE);
         findViewById(R.id.next_button).setVisibility(View.INVISIBLE);
         findViewById(R.id.stop_button).setVisibility(View.INVISIBLE);
-        TextView textViewPlaying = (TextView) findViewById(R.id.playing);
-        textViewPlaying.setText("");
-        TextView textViewPlayList = (TextView) findViewById(R.id.play_list);
-        textViewPlayList.setText("");
+        TextView tvPlaying = (TextView) findViewById(R.id.playing);
+        tvPlaying.setText("");
+        TextView tvPlayList = (TextView) findViewById(R.id.play_list);
+        tvPlayList.setText("");
     }
 
     private void displayPlayList() {
-        TextView textViewPlayList = (TextView) findViewById(R.id.play_list);
-        textViewPlayList.setMovementMethod(new ScrollingMovementMethod());
-        textViewPlayList.setText(null);
+        TextView tvPlayList = (TextView) findViewById(R.id.play_list);
+        tvPlayList.setMovementMethod(new ScrollingMovementMethod());
+        tvPlayList.setText(null);
         if (uriList.isEmpty()) {
-            textViewPlayList.setText("");
+            tvPlayList.setText("");
         } else {
-            for (int i = uriList.size() -1; i >=0; i--) {
-                uri = uriList.get(i);
-                trackList.add(i, FilenameUtils.getBaseName(uriList.get(i).toString()));
-                textViewPlayList.append("\n" + trackList.get(i));
+            for (int i = uriList.size() - 1; i >= 0; i--) {
+                tvPlayList.append("\n" + (uriList.get(i)).getPath());
             }
         }
     }
